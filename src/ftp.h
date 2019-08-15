@@ -29,10 +29,11 @@ misrepresented as being the original software.
 #ifdef __cplusplus
 extern "C"{
 #endif
+#include <stdbool.h>
 
-void accept_ftp_client(s32 server);
+void accept_ftp_client(int32_t server);
 void set_ftp_password(char *new_password);
-bool process_ftp_events(s32 server);
+bool process_ftp_events(int32_t server);
 void cleanup_ftp();
 
 #ifdef __cplusplus

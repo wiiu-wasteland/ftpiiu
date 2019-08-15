@@ -11,3 +11,6 @@
 /sd_loader/*.elf
 /udp_debug_reader/obj
 /udp_debug_reader/GeckoLog.txt
+*.cscope_file_list
+*.rpx
+*.cbp

@@ -29,8 +29,9 @@
 #include <malloc.h>
 #include <string.h>
 #include "virtualpath.h"
+#include "utils/logger.h"
 
-u8 MAX_VIRTUAL_PARTITIONS = 0;
+uint8_t MAX_VIRTUAL_PARTITIONS = 0;
 VIRTUAL_PARTITION * VIRTUAL_PARTITIONS = NULL;
 
 void VirtualMountDevice(const char * path)
@@ -64,7 +65,6 @@ void VirtualMountDevice(const char * path)
 		i++;
 	}
 	while(path[i-1] != '/');
-
 	AddVirtualPath(name, alias, prefix);
 }
 
@@ -93,12 +93,21 @@ void AddVirtualPath(const char *name, const char *alias, const char *prefix)
 
 void MountVirtualDevices()
 {
-    VirtualMountDevice("sd:/");
+    VirtualMountDevice("fs:/");
+    VirtualMountDevice("slccmpt01:/");
+    VirtualMountDevice("storage_odd_tickets:/");
+    VirtualMountDevice("storage_odd_updates:/");
+    VirtualMountDevice("storage_odd_content:/");
+    VirtualMountDevice("storage_odd_content2:/");
+    VirtualMountDevice("storage_slc:/");
+    VirtualMountDevice("storage_mlc:/");
+    VirtualMountDevice("storage_usb:/");
+    VirtualMountDevice("usb:/");
 }
 
 void UnmountVirtualPaths()
 {
-	u32 i = 0;
+	uint32_t i = 0;
 	for(i = 0; i < MAX_VIRTUAL_PARTITIONS; i++)
 	{
 		if(VIRTUAL_PARTITIONS[i].name)
