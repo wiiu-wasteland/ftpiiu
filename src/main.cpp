@@ -3,7 +3,6 @@
 #include <stdlib.h>
 #include <malloc.h>
 #include <stdint.h>
-#include <fat.h>
 #include <iosuhax.h>
 #include <iosuhax_devoptab.h>
 #include <iosuhax_disc_interface.h>
