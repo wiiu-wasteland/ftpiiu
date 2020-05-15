@@ -25,63 +25,9 @@
 #include "ftp.h"
 #include "virtualpath.h"
 #include "net.h"
+#include "console.h"
 
 #define PORT                    21
-#define MAX_CONSOLE_LINES_TV    27
-#define MAX_CONSOLE_LINES_DRC   18
-
-static char * consoleArrayTv[MAX_CONSOLE_LINES_TV];
-static char * consoleArrayDrc[MAX_CONSOLE_LINES_DRC];
-
-extern "C" void console_printf(const char *format, ...) {
-
-
-    return;
-    char * tmp = NULL;
-
-    va_list va;
-    va_start(va, format);
-    if((vasprintf(&tmp, format, va) >= 0) && tmp) {
-        if(consoleArrayTv[0])
-            free(consoleArrayTv[0]);
-        if(consoleArrayDrc[0])
-            free(consoleArrayDrc[0]);
-
-        for(int i = 1; i < MAX_CONSOLE_LINES_TV; i++)
-            consoleArrayTv[i-1] = consoleArrayTv[i];
-
-        for(int i = 1; i < MAX_CONSOLE_LINES_DRC; i++)
-            consoleArrayDrc[i-1] = consoleArrayDrc[i];
-
-        if(strlen(tmp) > 79)
-            tmp[79] = 0;
-
-        consoleArrayTv[MAX_CONSOLE_LINES_TV-1] = (char*)malloc(strlen(tmp) + 1);
-        if(consoleArrayTv[MAX_CONSOLE_LINES_TV-1])
-            strcpy(consoleArrayTv[MAX_CONSOLE_LINES_TV-1], tmp);
-
-        consoleArrayDrc[MAX_CONSOLE_LINES_DRC-1] = (tmp);
-    }
-    va_end(va);
-
-    // Clear screens
-    OSScreenClearBufferEx(SCREEN_TV, 0);
-    OSScreenClearBufferEx(SCREEN_DRC, 0);
-
-
-    for(int i = 0; i < MAX_CONSOLE_LINES_TV; i++) {
-        if(consoleArrayTv[i])
-            OSScreenPutFontEx(SCREEN_TV, 0, i, consoleArrayTv[i]);
-    }
-
-    for(int i = 0; i < MAX_CONSOLE_LINES_DRC; i++) {
-        if(consoleArrayDrc[i])
-            OSScreenPutFontEx(SCREEN_DRC, 0, i, consoleArrayDrc[i]);
-    }
-
-    OSScreenFlipBuffersEx(SCREEN_TV);
-    OSScreenFlipBuffersEx(SCREEN_DRC);
-}
 
 //just to be able to call async
 void someFunc(void *arg) {
@@ -166,31 +112,7 @@ extern "C" int Menu_Main(void) {
         VirtualMountDevice("usb:/");
     }
 
-    for(int i = 0; i < MAX_CONSOLE_LINES_TV; i++)
-        consoleArrayTv[i] = NULL;
-
-    for(int i = 0; i < MAX_CONSOLE_LINES_DRC; i++)
-        consoleArrayDrc[i] = NULL;
-
-    // Prepare screen
-    int screen_buf0_size = 0;
-
-    // Init screen and screen buffers
-    /*OSScreenInit();
-    screen_buf0_size = OSScreenGetBufferSizeEx(SCREEN_TV);
-    OSScreenSetBufferEx(SCREEN_TV, (void *)0xF4000000);
-    OSScreenSetBufferEx(SCREEN_DRC, (void *)(0xF4000000 + screen_buf0_size));
-
-    OSScreenEnableEx(SCREEN_TV, 1);
-    OSScreenEnableEx(SCREEN_DRC, 1);
-
-    // Clear screens
-    OSScreenClearBufferEx(SCREEN_TV, 0);
-    OSScreenClearBufferEx(SCREEN_DRC, 0);
-
-    // Flip buffers
-    OSScreenFlipBuffersEx(SCREEN_TV);
-    OSScreenFlipBuffersEx(SCREEN_DRC);*/
+    console_init();
 
     console_printf("FTPiiU v0.4u2 is listening on %u.%u.%u.%u:%i", (network_gethostip() >> 24) & 0xFF, (network_gethostip() >> 16) & 0xFF, (network_gethostip() >> 8) & 0xFF, (network_gethostip() >> 0) & 0xFF, PORT);
 
@@ -219,15 +141,18 @@ extern "C" int Menu_Main(void) {
                 cleanup_ftp();
                 network_close(serverSocket);
                 serverSocket = -1;
+                console_printf("Stopped FTP server\n");
             }
+            console_release_foreground();
             ProcUIDrawDoneRelease();
             break;
         }
         case PROCUI_STATUS_IN_FOREGROUND: {
+            console_in_foreground();
             if(serverSocket < 0) {
                 DEBUG_FUNCTION_LINE("back in PROCUI_STATUS_IN_FOREGROUND, createig network\n");
                 serverSocket = create_server(PORT);
-
+                console_printf("Started FTP server\n");
             }
             if(serverSocket >= 0) {
                 //DEBUG_FUNCTION_LINE("Server socket = %d\n",serverSocket);
@@ -260,18 +185,7 @@ extern "C" int Menu_Main(void) {
 
     DEBUG_FUNCTION_LINE("loop done\n");
 
-    //! free memory
-    for(int i = 0; i < MAX_CONSOLE_LINES_TV; i++) {
-        if(consoleArrayTv[i])
-            free(consoleArrayTv[i]);
-    }
-
-    for(int i = 0; i < MAX_CONSOLE_LINES_DRC; i++) {
-        if(consoleArrayDrc[i])
-            free(consoleArrayDrc[i]);
-    }
-
-
+    console_deinit();
 
     //!*******************************************************************
     //!                    Enter main application                        *
@@ -304,8 +218,6 @@ extern "C" int Menu_Main(void) {
     WHBProcShutdown();
 
     nn::ac::Finalize();
-
-    //OSScreenShutdown();
 
     DEBUG_FUNCTION_LINE("Release memory\n");
 

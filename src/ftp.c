@@ -36,6 +36,7 @@ misrepresented as being the original software.
 #define gettime()               OSGetTick()
 #define errno                   wiiu_geterrno()
 
+#include "console.h"
 #include "ftp.h"
 #include "virtualpath.h"
 #include "net.h"
@@ -45,8 +46,6 @@ misrepresented as being the original software.
 
 #define FTP_BUFFER_SIZE 1024
 #define MAX_CLIENTS 5
-
-extern void console_printf(const char *format, ...);
 
 static const uint16_t SRC_PORT = 20;
 static const int32_t EQUIT = 696969;
