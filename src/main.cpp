@@ -29,60 +29,28 @@
 
 #define PORT                    21
 
-//just to be able to call async
-void someFunc(void *arg) {
-    (void)arg;
-}
-
-
 static uint32_t
 procSaveCallback(void *context) {
     OSSavesDone_ReadyToRelease();
     return 0;
 }
 
-uint32_t hostIpAddress = 0;
-
 /* Entry point */
 extern "C" int Menu_Main(void) {
-    WHBInitializeSocketLibrary();
-
-    nn::ac::ConfigIdNum configId;
-
-    nn::ac::Initialize();
-    nn::ac::GetStartupId(&configId);
-    nn::ac::Connect(configId);
-
-    ACGetAssignedAddress(&hostIpAddress);
-
+    int fsaFd = -1, iosuhaxMount = 0;
 
     ProcUIInitEx(&procSaveCallback, NULL);
 
+    net_init();
     log_init();
-    DEBUG_FUNCTION_LINE("Starting launcher\n");
+    console_init();
 
-    DEBUG_FUNCTION_LINE("Function exports loaded\n");
+    DEBUG_FUNCTION_LINE("add SD partition\n");
+    AddVirtualPath("sd", "/sd", "fs:/vol/external01/");
 
-    //!*******************************************************************
-    //!                    Initialize heap memory                        *
-    //!*******************************************************************
-    DEBUG_FUNCTION_LINE("Initialize memory management\n");
-    //! We don't need bucket and MEM1 memory so no need to initialize
-    //memoryInitialize();
-
-    //!*******************************************************************
-    //!                        Initialize FS                             *
-    //!*******************************************************************
-    DEBUG_FUNCTION_LINE("Mount SD partition\n");
-
-    int fsaFd = -1;
-    int iosuhaxMount = 0;
-
+    DEBUG_FUNCTION_LINE("mount IOSUHAX devices\n");
     int res = IOSUHAX_Open(NULL);
-    if(res < 0) {
-        DEBUG_FUNCTION_LINE("IOSUHAX_open failed\n");
-        VirtualMountDevice("fs:/");
-    } else {
+    if(res >= 0) {
         iosuhaxMount = 1;
         //fatInitDefault();
 
@@ -100,7 +68,6 @@ extern "C" int Menu_Main(void) {
         mount_fs("storage_mlc", fsaFd, NULL, "/vol/storage_mlc01");
         mount_fs("storage_usb", fsaFd, NULL, "/vol/storage_usb01");
 
-        VirtualMountDevice("fs:/");
         VirtualMountDevice("slccmpt01:/");
         VirtualMountDevice("storage_odd_tickets:/");
         VirtualMountDevice("storage_odd_updates:/");
@@ -112,14 +79,12 @@ extern "C" int Menu_Main(void) {
         VirtualMountDevice("usb:/");
     }
 
-    console_init();
-
     console_printf("FTPiiU v0.4u2 is listening on %u.%u.%u.%u:%i", (network_gethostip() >> 24) & 0xFF, (network_gethostip() >> 16) & 0xFF, (network_gethostip() >> 8) & 0xFF, (network_gethostip() >> 0) & 0xFF, PORT);
 
     DEBUG_FUNCTION_LINE("starting server\n");
 
     int serverSocket = create_server(PORT);
-    DEBUG_FUNCTION_LINE("Server socket = %d\n",serverSocket);
+    DEBUG_FUNCTION_LINE("server socket = %d\n",serverSocket);
     int network_down = 0;
 
     DEBUG_FUNCTION_LINE("going into procui loop\n");
@@ -150,12 +115,12 @@ extern "C" int Menu_Main(void) {
         case PROCUI_STATUS_IN_FOREGROUND: {
             console_in_foreground();
             if(serverSocket < 0) {
-                DEBUG_FUNCTION_LINE("back in PROCUI_STATUS_IN_FOREGROUND, createig network\n");
+                DEBUG_FUNCTION_LINE("back in PROCUI_STATUS_IN_FOREGROUND, creating network\n");
                 serverSocket = create_server(PORT);
                 console_printf("Started FTP server\n");
             }
             if(serverSocket >= 0) {
-                //DEBUG_FUNCTION_LINE("Server socket = %d\n",serverSocket);
+                //DEBUG_FUNCTION_LINE("server socket = %d\n",serverSocket);
                 network_down = process_ftp_events(serverSocket);
                 if(network_down && !requestedExit) {
 
@@ -166,7 +131,7 @@ extern "C" int Menu_Main(void) {
                     serverSocket = -1;
                     DEBUG_FUNCTION_LINE("Network is down, exit to sys menu\n");
                     SYSRelaunchTitle(0, NULL);
-                    requestedExit =true;
+                    requestedExit = true;
 
                 }
             }
@@ -185,14 +150,8 @@ extern "C" int Menu_Main(void) {
 
     DEBUG_FUNCTION_LINE("loop done\n");
 
-    console_deinit();
 
-    //!*******************************************************************
-    //!                    Enter main application                        *
-    //!*******************************************************************
-
-    DEBUG_FUNCTION_LINE("Unmount SD\n");
-
+    DEBUG_FUNCTION_LINE("unmounting IOSUHAX devices\n");
     if(iosuhaxMount) {
         IOSUHAX_sdio_disc_interface.shutdown();
         IOSUHAX_usb_disc_interface.shutdown();
@@ -210,16 +169,12 @@ extern "C" int Menu_Main(void) {
     }
 
     UnmountVirtualPaths();
-	
-	while(WHBProcIsRunning()) {
-		
-	}
 
+    console_deinit();
+    net_deinit();
+
+    while(WHBProcIsRunning());
     WHBProcShutdown();
-
-    nn::ac::Finalize();
-
-    DEBUG_FUNCTION_LINE("Release memory\n");
 
     return EXIT_SUCCESS;
 }

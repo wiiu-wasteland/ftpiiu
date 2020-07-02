@@ -38,35 +38,27 @@ misrepresented as being the original software.
 #define MIN_NET_BUFFER_SIZE 4096
 #define FREAD_BUFFER_SIZE (64*1024)
 
-extern uint32_t hostIpAddress;
-
 static uint32_t NET_BUFFER_SIZE = MAX_NET_BUFFER_SIZE;
 
-#if 0
-void initialise_network() {
-    printf("Waiting for network to initialise...\n");
-    int32_t result = -1;
-    while (!check_reset_synchronous() && result < 0) {
-        net_deinit();
-        while (!check_reset_synchronous() && (result = net_init()) == -WIIU_EAGAIN);
-        if (result < 0)
-            printf("net_init() failed: [%i] %s, retrying...\n", result, strerror(-result));
-    }
-    if (result >= 0) {
-        uint32_t ip = 0;
-        do {
-            ip = net_gethostip();
-            if (!ip)
-                printf("net_gethostip() failed, retrying...\n");
-        } while (!check_reset_synchronous() && !ip);
-        if (ip) {
-            struct in_addr addr;
-            addr.s_addr = ip;
-            printf("Network initialised.  Wii IP address: %s\n", inet_ntoa(addr));
-        }
-    }
+uint32_t hostIpAddress = 0;
+
+void network_init()
+{
+    unsigned int nn_startupid;
+    
+    ACInitialize();
+    ACGetStartupId(&nn_startupid);
+    ACConnectWithConfigId(nn_startupid);
+    ACGetAssignedAddress(&hostIpAddress);
+    
+    WHBInitializeSocketLibrary();
 }
-#endif
+
+void network_deinit()
+{
+    WHBShutdownSocketLibrary();
+    ACFinalize();
+}
 
 int32_t network_socket(uint32_t domain,uint32_t type,uint32_t protocol) {
     int sock = socket(domain, type, protocol);

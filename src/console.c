@@ -15,147 +15,165 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-#define MAX_CONSOLE_LINES_TV    (27)
-#define MAX_CONSOLE_LINES_DRC   (18)
-#define FRAME_HEAP_TAG          (0x46545055)
+#define CONSOLE_CALLBACK_PRIORITY	(100)
+#define CONSOLE_MAX_LINES_TV		(27)
+#define CONSOLE_MAX_LINES_DRC		(18)
+#define CONSOLE_FRAME_HEAP_TAG		(0x46545055)
 
 static MEMHeapHandle MEM1Heap;
 
 static void *sBufferTV, *sBufferDRC;
 static uint32_t sBufferSizeTV, sBufferSizeDRC;
 
-static char * consoleArrayTv[MAX_CONSOLE_LINES_TV];
-static char * consoleArrayDrc[MAX_CONSOLE_LINES_DRC];
-
-static int in_foreground = 0;
+static char *consoleArrayTv[CONSOLE_MAX_LINES_TV] = {0};
+static char *consoleArrayDrc[CONSOLE_MAX_LINES_DRC] = {0};
 
 static void console_refresh()
 {
-    if (!in_foreground)
-        return;
+	if (!in_foreground)
+		return;
 
-    OSScreenClearBufferEx(SCREEN_TV, 0);
-    OSScreenClearBufferEx(SCREEN_DRC, 0);
-    
-    for(int i = 0; i < MAX_CONSOLE_LINES_TV; i++)
-    {
-        if(consoleArrayTv[i])
-            OSScreenPutFontEx(SCREEN_TV, 0, i, consoleArrayTv[i]);
-    }
-    
-    for(int i = 0; i < MAX_CONSOLE_LINES_DRC; i++)
-    {
-        if(consoleArrayDrc[i])
-            OSScreenPutFontEx(SCREEN_DRC, 0, i, consoleArrayDrc[i]);
-    }
-    
-    DCFlushRange(sBufferTV, sBufferSizeTV);
-    DCFlushRange(sBufferDRC, sBufferSizeDRC);
-    OSScreenFlipBuffersEx(SCREEN_TV);
-    OSScreenFlipBuffersEx(SCREEN_DRC);
+	OSScreenClearBufferEx(SCREEN_TV, 0);
+	OSScreenClearBufferEx(SCREEN_DRC, 0);
+	
+	for(int i = 0; i < CONSOLE_MAX_LINES_TV; i++)
+	{
+		if(consoleArrayTv[i])
+			OSScreenPutFontEx(SCREEN_TV, 0, i, consoleArrayTv[i]);
+	}
+	
+	for(int i = 0; i < CONSOLE_MAX_LINES_DRC; i++)
+	{
+		if(consoleArrayDrc[i])
+			OSScreenPutFontEx(SCREEN_DRC, 0, i, consoleArrayDrc[i]);
+	}
+	
+	DCFlushRange(sBufferTV, sBufferSizeTV);
+	DCFlushRange(sBufferDRC, sBufferSizeDRC);
+	OSScreenFlipBuffersEx(SCREEN_TV);
+	OSScreenFlipBuffersEx(SCREEN_DRC);
+}
+
+void console_clear()
+{
+	for(int i = 0; i < CONSOLE_MAX_LINES_TV; i++)
+	{
+		if(!consoleArrayTv[i])
+			continue;
+		free(consoleArrayTv[i]);
+		consoleArrayTv[i] = NULL;
+	}
+
+	for(int i = 0; i < CONSOLE_MAX_LINES_DRC; i++)
+	{
+		if(!consoleArrayDrc[i])
+			continue;
+		free(consoleArrayDrc[i]);
+		consoleArrayDrc[i] = NULL;
+	}
 }
 
 void console_printf(const char *format, ...)
 {
-    char * tmp = NULL;
+	char * tmp = NULL;
 
-    va_list va;
-    va_start(va, format);
-    if((vasprintf(&tmp, format, va) >= 0) && tmp)
-    {
-        if(consoleArrayTv[0])
-            free(consoleArrayTv[0]);
-        if(consoleArrayDrc[0])
-            free(consoleArrayDrc[0]);
+	va_list va;
+	va_start(va, format);
+	if((vasprintf(&tmp, format, va) >= 0) && tmp)
+	{
+		if(consoleArrayTv[0])
+			free(consoleArrayTv[0]);
+		if(consoleArrayDrc[0])
+			free(consoleArrayDrc[0]);
 
-        for(int i = 1; i < MAX_CONSOLE_LINES_TV; i++)
-            consoleArrayTv[i-1] = consoleArrayTv[i];
+		for(int i = 1; i < CONSOLE_MAX_LINES_TV; i++)
+			consoleArrayTv[i-1] = consoleArrayTv[i];
 
-        for(int i = 1; i < MAX_CONSOLE_LINES_DRC; i++)
-            consoleArrayDrc[i-1] = consoleArrayDrc[i];
+		for(int i = 1; i < CONSOLE_MAX_LINES_DRC; i++)
+			consoleArrayDrc[i-1] = consoleArrayDrc[i];
 
-        if(strlen(tmp) > 79)
-            tmp[79] = 0;
+		if(strlen(tmp) > 79)
+			tmp[79] = 0;
 
-        consoleArrayTv[MAX_CONSOLE_LINES_TV-1] = strdup(tmp);
-        consoleArrayDrc[MAX_CONSOLE_LINES_DRC-1] = (tmp);
-    }
-    va_end(va);
+		consoleArrayTv[CONSOLE_MAX_LINES_TV-1] = strdup(tmp);
+		consoleArrayDrc[CONSOLE_MAX_LINES_DRC-1] = (tmp);
+	}
+	va_end(va);
 
-    console_refresh();
+	console_refresh();
 }
 
-void console_in_foreground()
+static void console_acquire_foreground()
 {
-    if (in_foreground)
-        return;
+	if (in_foreground)
+		return;
 
-    /* Reinitialize OSScreen after entering foreground */
-    MEM1Heap = MEMGetBaseHeapHandle(MEM_BASE_HEAP_MEM1);
-    MEMRecordStateForFrmHeap(MEM1Heap, FRAME_HEAP_TAG);
-    
-    OSScreenInit();
-    
-    sBufferSizeTV = OSScreenGetBufferSizeEx(SCREEN_TV);
-    sBufferSizeDRC = OSScreenGetBufferSizeEx(SCREEN_DRC);
-    
-    sBufferTV = MEMAllocFromFrmHeapEx(MEM1Heap, sBufferSizeTV, 4);
-    sBufferDRC = MEMAllocFromFrmHeapEx(MEM1Heap, sBufferSizeDRC, 4);
-    
-    OSScreenSetBufferEx(SCREEN_TV, sBufferTV);
-    OSScreenSetBufferEx(SCREEN_DRC, sBufferDRC);
-    
-    OSScreenEnableEx(SCREEN_TV, 1);
-    OSScreenEnableEx(SCREEN_DRC, 1);
+	/* Reinitialize OSScreen after entering foreground */
+	MEM1Heap = MEMGetBaseHeapHandle(MEM_BASE_HEAP_MEM1);
+	MEMRecordStateForFrmHeap(MEM1Heap, CONSOLE_FRAME_HEAP_TAG);
+	
+	OSScreenInit();
+	
+	sBufferSizeTV = OSScreenGetBufferSizeEx(SCREEN_TV);
+	sBufferSizeDRC = OSScreenGetBufferSizeEx(SCREEN_DRC);
+	
+	sBufferTV = MEMAllocFromFrmHeapEx(MEM1Heap, sBufferSizeTV, 4);
+	sBufferDRC = MEMAllocFromFrmHeapEx(MEM1Heap, sBufferSizeDRC, 4);
+	
+	OSScreenSetBufferEx(SCREEN_TV, sBufferTV);
+	OSScreenSetBufferEx(SCREEN_DRC, sBufferDRC);
+	
+	OSScreenEnableEx(SCREEN_TV, 1);
+	OSScreenEnableEx(SCREEN_DRC, 1);
 
-    in_foreground = 1;
+	in_foreground = 1;
 
-    /* Rerender screen content */
-    console_refresh();
+	/* Rerender screen content */
+	console_refresh();
 }
 
-void console_release_foreground()
+static void console_release_foreground()
 {
-    if (!in_foreground)
-        return;
+	if (!in_foreground)
+		return;
 
-    /* Deinitialize OSScreen before entering background */
-    MEMFreeByStateToFrmHeap(MEM1Heap, FRAME_HEAP_TAG);
+	/* Deinitialize OSScreen before entering background */
+	MEMFreeByStateToFrmHeap(MEM1Heap, CONSOLE_FRAME_HEAP_TAG);
 
-    in_foreground = 0;
+	in_foreground = 0;
 }
 
 void console_init()
 {
-    /* Initialize console content */
-    for(int i = 0; i < MAX_CONSOLE_LINES_TV; i++)
-        consoleArrayTv[i] = NULL;
+	/* Initialize console content */
+	for(int i = 0; i < CONSOLE_MAX_LINES_TV; i++)
+		consoleArrayTv[i] = NULL;
 
-    for(int i = 0; i < MAX_CONSOLE_LINES_DRC; i++)
-        consoleArrayDrc[i] = NULL;
+	for(int i = 0; i < CONSOLE_MAX_LINES_DRC; i++)
+		consoleArrayDrc[i] = NULL;
 
-    /* Run OSScreen inialization */
-    console_in_foreground();
+	/* Run OSScreen inialization */
+	console_in_foreground();
 }
 
 void console_deinit()
 {
-    console_release_foreground();
+	console_release_foreground();
 
-    /* Cleanup console content */
-    for(int i = 0; i < MAX_CONSOLE_LINES_TV; i++)
-    {
-        if(!consoleArrayTv[i])
-            continue;
-        free(consoleArrayTv[i]);
-        consoleArrayTv[i] = NULL;
-    }
+	/* Cleanup console content */
+	for(int i = 0; i < CONSOLE_MAX_LINES_TV; i++)
+	{
+		if(!consoleArrayTv[i])
+			continue;
+		free(consoleArrayTv[i]);
+		consoleArrayTv[i] = NULL;
+	}
 
-    for(int i = 0; i < MAX_CONSOLE_LINES_DRC; i++)
-    {
-        if(!consoleArrayDrc[i])
-            continue;
-        free(consoleArrayDrc[i]);
-        consoleArrayDrc[i] = NULL;
-    }
+	for(int i = 0; i < CONSOLE_MAX_LINES_DRC; i++)
+	{
+		if(!consoleArrayDrc[i])
+			continue;
+		free(consoleArrayDrc[i]);
+		consoleArrayDrc[i] = NULL;
+	}
 }
